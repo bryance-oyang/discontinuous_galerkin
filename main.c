@@ -1,6 +1,8 @@
 /*
+ * Discontinuous Galerkin linear wave test
+ *
  * Solves the nonlinear 1D PDE: D_t u + D_x (u^2 / 2) = 0
- * Init cond is 1 + WAVE_AMP*sin(2pi x) and we do linear wave test
+ * Init cond is 1 + WAVE_AMP*sin(2pi x) and we do linear wave test in x in [0,1]
  *
  * Alt form: D_t u + u D_x u = 0 so linear wavespeed is u
  *
@@ -34,7 +36,7 @@
 
 #define NGHOST 1
 #define ORDER 3
-#define CFL (0.8 * (1.0 / (2*(3) + 1)))
+#define CFL (0.8 * (1.0 / (2*(3) + 1))) /* 1 / (2*order + 1) */
 #define WAVE_AMP 1e-6
 #define MAX_TIME 2.2
 
