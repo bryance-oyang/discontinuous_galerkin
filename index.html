@@ -1,0 +1,46 @@
+<html>
+  <head>
+    <title>finite element method</title>
+    <script src='https://cdn.plot.ly/plotly-2.20.0.min.js'></script>
+  </head>
+
+  <body bgcolor="#808080">
+    <h1>DG</h1>
+    <div id="plot"></div>
+  </body>
+
+  <script lang="javascript">
+    function setup_draw() {
+      const websocket = new WebSocket("ws://localhost:9743");
+      websocket.binaryType = "arraybuffer";
+
+      websocket.onmessage = (event) => {
+        const data = new DataView(event.data)
+        const ncell = data.getFloat64(0, true);
+        const xcc = new Array();
+        const array = new Array();
+        const dx = 1.0 / ncell;
+        for (let i = 0; i < ncell; i++) {
+          const value = data.getFloat64(8*(i + 1), true);
+          array.push(value);
+          xcc.push((i + 0.5)*dx);
+        }
+
+        var trace = {
+          x: xcc,
+          y: array,
+          mode: "lines"
+        };
+
+        Plotly.newPlot("plot", [trace]);
+      }
+
+      websocket.onopen = (event) => {console.log("connected");};
+      websocket.onclose = (event) => {
+        setTimeout(setup_draw, 1000);
+      };
+    }
+
+    setup_draw();
+  </script>
+</html>

@@ -15,6 +15,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <signal.h>
 #include <math.h>
@@ -23,9 +24,12 @@
 
 #define NGHOST 1
 #define ORDER 2
-#define CFL (0.5 * (1.0 / (2*(3) + 1)))
-#define WAVE_AMP 1e-6
-#define MAX_TIME 1
+#define CFL (0.8 * (1.0 / (2*(3) + 1)))
+#define WAVE_AMP 1e-1
+#define MAX_TIME 3.2
+
+double *bcast_data;
+size_t bcast_data_size;
 
 /* Legendre P at x = 0 */
 double Pcc[3];
@@ -120,6 +124,13 @@ void init_cond(struct sim *restrict sim)
 		for (int m = 1; m < ORDER; m++) {
 			sim->c[ORDER*i + m] = WAVE_AMP * integral_Psin(m, x, sim->dx, 0);
 		}
+
+		/*
+		sim->c[ORDER*i + 0] = (double)(((int)(x / 0.1)) % 2) + 1;
+		for (int m = 1; m < ORDER; m++) {
+			sim->c[ORDER*i + m] = 0;
+		}
+		*/
 	}
 }
 
@@ -243,8 +254,20 @@ void print_c(struct sim *restrict sim)
 	}
 }
 
-void run_sim(int ncell)
+void send_data(struct sim *restrict sim)
 {
+	bcast_data[0] = sim->ncell;
+	for (int i = 0; i < sim->ncell; i++) {
+		bcast_data[i + 1] = sim->c[ORDER*(NGHOST + i)];
+	}
+	ws_ctube_broadcast(ctube, bcast_data, bcast_data_size);
+}
+
+void run_sim(int ncell, int do_bcast)
+{
+	bcast_data_size = (ncell + 1) * sizeof(*bcast_data);
+	bcast_data = malloc(bcast_data_size);
+
 	struct sim sim;
 
 	sim.ncell = ncell;
@@ -274,6 +297,11 @@ void run_sim(int ncell)
 
 		take_big_timestep(&sim);
 
+		if (do_bcast) {
+			send_data(&sim);
+			usleep(1000);
+		}
+
 		if (sim.t >= MAX_TIME) {
 			break;
 		}
@@ -287,6 +315,7 @@ void run_sim(int ncell)
 	free(sim.ur);
 	free(sim.dcdt);
 	free(sim.J);
+	free(bcast_data);
 }
 
 int main()
@@ -299,8 +328,12 @@ int main()
 
 	ctube = ws_ctube_open(9743, 2, 0, 24);
 
-	for (int ncell = 2; ncell <= 2048; ncell *= 2) {
-		run_sim(ncell);
+	for (int ncell = 2; ncell <= 4096; ncell *= 2) {
+		int do_bcast = 0;
+		if (ncell == 512) {
+			do_bcast = 1;
+		}
+		run_sim(ncell, do_bcast);
 	}
 
 	ws_ctube_close(ctube);
