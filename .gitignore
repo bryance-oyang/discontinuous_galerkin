@@ -1,0 +1,10 @@
+.vscode/
+*.o
+*.s
+*.d
+vgcore.*
+a.out
+html/
+latex/
+perf.*
+*.blend1
