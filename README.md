@@ -15,7 +15,7 @@ $$
 \partial_t u + \frac{1}{2}\partial_x u^2 = 0
 $$
 
-in the spatial interval [0, 1]. Note the linearized wave speed is $u$ and flux is $u^2$.
+in the spatial interval [0, 1]. Note the linearized wave speed is $u$ and flux is $u^2/2$.
 
 Expand within each cell centered at $x = a$, $x \in [a - \Delta x/2, a + \Delta x / 2]$
 
