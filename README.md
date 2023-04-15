@@ -39,8 +39,7 @@ and integrate the 2nd term by parts, while using orthogonality of $w$'s on the
 first term. The coefficient update is obtained as
 
 $$
-\frac{\Delta x}{2m + 1} (\partial_t c_m) = -[w_m J_{\text{numerical}}]_-^+
-+ \frac{1}{2} \sum_{nl} c_n c_l \int w_n w_l (\partial_x w_m)\,dx
+\frac{\Delta x}{2m + 1} (\partial_t c_m) = -[w_m J_{\text{numerical}}]_-^+ + \frac{1}{2} \sum_{nl} c_n c_l \int w_n w_l (\partial_x w_m)\,dx
 $$
 
 where $J_{\text{numerical}}$ is the numerical flux at cell edges to be found by a Riemann solver.
