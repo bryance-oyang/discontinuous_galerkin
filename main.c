@@ -1,11 +1,21 @@
 /*
- * To solve D_t u + D_x (u^2 / 2) = 0
+ * Solves the nonlinear 1D PDE: D_t u + D_x (u^2 / 2) = 0
+ * Init cond is 1 + WAVE_AMP*sin(2pi x) and we do linear wave test
  *
- * D_t c_m = (2m + 1) / dx * (-[wm f] + 1/2 Sum_n Sum_l c_n c_p DPPP_{mnl})
- * where
- * DPPP_{mnl} = integral of dP_m/dx P_n P_l (Legendre poly)
+ * Alt form: D_t u + u D_x u = 0 so linear wavespeed is u
  *
- * Shape functions are w_m = P_m(2(x - a) / dx) where a is the cell center coord
+ * Expand in each cell from a - dx/2 to a + dx/2:
+ * u = Sum_n c_n P_n(2*(x - a) / dx) where P_n is Legendre poly and a is cell center
+ *
+ * Multiply PDE by u_m and integrate over cell to obtain the DG coefficient update:
+ * D_t c_m = (2m + 1) / dx * (-[wm J_riemm]_-^+ + 1/2 Sum_n Sum_l c_n c_p DPPP_{mnl})
+ * where J_riemm is the riemman fluxes at cell edges and
+ * DPPP_{mnl} = integral of dP_m/dx P_n P_l
+ *
+ * Method:
+ * 1) Compute cell edge values by evaluating Legendre P_m at edges
+ * 2) Use HLLE to compute cell edge fluxes
+ * 3) Update coefficients c_m
  */
 
 #ifdef DEBUG
@@ -28,6 +38,7 @@
 #define WAVE_AMP 1e-6
 #define MAX_TIME 2.2
 
+/* for sending data to browser */
 double *bcast_data;
 size_t bcast_data_size;
 
@@ -35,21 +46,22 @@ size_t bcast_data_size;
 double Pcc[3];
 /* integral of dP_m/dx P_n P_l */
 double DPPP[3][3][3];
+/* SSPRK3 time integrator weights */
 double ssprk3_w[3][3];
 
 struct ws_ctube *ctube;
 
-double hlle(double ul, double ur, double fl, double fr, double ca, double cb)
+double hlle(double ul, double ur, double jl, double jr, double ca, double cb)
 {
 	double cl = fmin(ca, cb);
 	double cr = fmax(ca, cb);
 
 	if (cl >= 0) {
-		return fl;
+		return jl;
 	} else if (cr <= 0) {
-		return fr;
+		return jr;
 	} else {
-		return (cr*cl*(ur - ul) + cr*fl - cl*fr) / (cr - cl);
+		return (cr*cl*(ur - ul) + cr*jl - cl*jr) / (cr - cl);
 	}
 }
 
@@ -98,7 +110,10 @@ void init_weights()
 	DPPP[2][2][1] = 0.8;
 }
 
-/* (2m+1) / 2 * P_m(2(x-a)/dx) sin(2pi(x - t)) */
+/*
+ * integral from a - dx/2 to a + dx/2 of
+ * (2m+1) / 2 * P_m(2(x-a)/dx) sin(2pi(x - t))
+ */
 double integral_Psin(double m, double a, double dx, double t)
 {
 	double answer = 0;
@@ -113,6 +128,11 @@ double integral_Psin(double m, double a, double dx, double t)
 	return answer * (2*m + 1) / dx;
 }
 
+/*
+ * init cond is 1 + sin(2pi x)
+ * coefficients c_m in each cell are obtained by integrating init cond with
+ * Legendre poly
+ */
 void init_cond(struct sim *restrict sim)
 {
 	sim->t = 0;
@@ -134,11 +154,11 @@ void init_cond(struct sim *restrict sim)
 	}
 }
 
+/* periodic boundary: loop around via ghost cells */
 void boundary(struct sim *restrict sim)
 {
 	int ncell = sim->ncell;
 
-	/* periodic */
 	for (int k = 0; k < NGHOST; k++) {
 		for (int m = 0; m < ORDER; m++) {
 			sim->c[ORDER*(k) + m] = sim->c[ORDER*(ncell + k) + m];
@@ -147,12 +167,14 @@ void boundary(struct sim *restrict sim)
 	}
 }
 
+/* evaluate legendre polynomials at cell edges */
 void compute_ulur(struct sim *restrict sim)
 {
 	for (int i = 0; i < sim->ncell + 2*NGHOST; i++) {
 		sim->ul[i] = 0;
 		sim->ur[i] = 0;
 
+		/* P_m is +/-1 at cell edges dep on m = odd/even */
 		for (int m = 0, parity = 1; m < ORDER; m++, parity *= -1) {
 			sim->ul[i] += sim->c[ORDER*i + m] * parity;
 			sim->ur[i] += sim->c[ORDER*i + m];
@@ -165,6 +187,7 @@ void determine_dt(struct sim *restrict sim)
 	double max_abs_wavespeed = 0;
 	compute_ulur(sim);
 	for (int i = 0; i < sim->ncell + 2*NGHOST; i++) {
+		/* linear wavespeed == u itself */
 		max_abs_wavespeed = fmax(fabs(sim->ul[i]), max_abs_wavespeed);
 		max_abs_wavespeed = fmax(fabs(sim->ur[i]), max_abs_wavespeed);
 	}
@@ -173,6 +196,7 @@ void determine_dt(struct sim *restrict sim)
 	sim->dt *= CFL;
 }
 
+/* get currents at cell faces */
 void compute_J(struct sim *restrict sim)
 {
 	compute_ulur(sim);
@@ -180,9 +204,9 @@ void compute_J(struct sim *restrict sim)
 	for (int i = 0; i < sim->ncell + 1; i++) {
 		double ul = sim->ur[NGHOST + i - 1];
 		double ur = sim->ul[NGHOST + i];
-		double fl = 0.5 * ul * ul;
-		double fr = 0.5 * ur * ur;
-		sim->J[NGHOST + i] = hlle(ul, ur, fl, fr, ul, ur);
+		double jl = 0.5 * ul * ul;
+		double jr = 0.5 * ur * ur;
+		sim->J[NGHOST + i] = hlle(ul, ur, jl, jr, ul, ur);
 	}
 }
 
@@ -191,9 +215,12 @@ void compute_dcdt(struct sim *restrict sim)
 	compute_J(sim);
 
 	for (int i = 0; i < sim->ncell; i++) {
+		/* parity: Legendre poly is +/-1 at edges of cell */
 		for (int m = 0, parity = 1; m < ORDER; m++, parity *= -1) {
+			/* see top level comment */
 			double flux = parity * sim->J[NGHOST + i] - sim->J[NGHOST + i + 1];
 
+			/* see top level comment */
 			double tensor = 0;
 			for (int n = 0; n < ORDER; n++) {
 				double cn = sim->c[ORDER*(NGHOST + i) + n];
@@ -210,6 +237,7 @@ void compute_dcdt(struct sim *restrict sim)
 	}
 }
 
+/* implements SSPRK3 3rd order time integrator */
 void take_big_timestep(struct sim *restrict sim)
 {
 	memcpy(sim->c0, sim->c, ORDER * (sim->ncell + 2*NGHOST) * sizeof(sim->c));
@@ -236,7 +264,10 @@ void l1_error(struct sim *restrict sim)
 	for (int i = 0; i < sim->ncell; i++) {
 		double x = i*sim->dx + 0.5*sim->dx;
 
+		/* compute cell-averaged density: only P_m survives integral */
 		double numerical = sim->c[ORDER*(NGHOST + i) + 0];
+
+		/* cell-average of sin wave */
 		double actual = 1 + WAVE_AMP * sin(sim->dx * M_PI) * sin(2*M_PI*(x - sim->t)) / (sim->dx * M_PI);
 		error += fabs(numerical - actual) * sim->dx;
 	}
@@ -254,6 +285,7 @@ void print_c(struct sim *restrict sim)
 	}
 }
 
+/* send data for plotting in browser */
 void send_data(struct sim *restrict sim)
 {
 	bcast_data[0] = sim->ncell;
@@ -299,7 +331,7 @@ void run_sim(int ncell, int do_bcast)
 
 		if (do_bcast) {
 			send_data(&sim);
-			usleep(1000);
+			usleep(100);
 		}
 
 		if (sim.t >= MAX_TIME) {
@@ -330,7 +362,7 @@ int main()
 
 	for (int ncell = 2; ncell <= 4096; ncell *= 2) {
 		int do_bcast = 0;
-		if (ncell == 512) {
+		if (ncell == 1024) {
 			do_bcast = 1;
 		}
 		run_sim(ncell, do_bcast);

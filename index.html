@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>finite element method</title>
+    <title>DG</title>
     <script src='https://cdn.plot.ly/plotly-2.20.0.min.js'></script>
   </head>
 
@@ -31,8 +31,15 @@
           y: array,
           mode: "lines"
         };
-
         Plotly.newPlot("plot", [trace]);
+
+        /*
+        var layout = {
+          xaxis: {range: [0, 1]},
+          yaxis: {range: [0.8, 1.2]}
+        };
+        Plotly.newPlot("plot", [trace], layout);
+        */
       }
 
       websocket.onopen = (event) => {console.log("connected");};
