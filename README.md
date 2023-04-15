@@ -32,14 +32,14 @@ $$
 Require the discretized weak form
 
 $$
-0 = \int w_m (\partial_t u + \partial_x u^2/2)\,dx
+0 = \int w_m (\partial_t u + \partial_x u^2/2)dx
 $$
 
 and integrate the 2nd term by parts, while using orthogonality of $w$'s on the
 first term. The coefficient update is obtained as
 
 $$
-\frac{\Delta x}{2m + 1} (\partial_t c_m) = -[w_m J_{\text{numerical}}]_-^+ + \frac{1}{2} \sum_{nl} c_n c_l \int w_n w_l (\partial_x w_m)\,dx
+\frac{\Delta x}{2m + 1} (\partial_t c_m) = -[w_m J_{\text{numerical}}]_-^+ + \frac{1}{2} \sum_{nl} c_n c_l \int w_n w_l (\partial_x w_m)dx
 $$
 
 where $J_{\text{numerical}}$ is the numerical flux at cell edges to be found by a Riemann solver.
@@ -47,11 +47,11 @@ where $J_{\text{numerical}}$ is the numerical flux at cell edges to be found by 
 $J_{\text{numerical}}$ is found by evaluating $u(x, t)$ at cell
 edges (where $w_m = \pm 1$) and then using HLLE.
 
-The term $\int w_n w_l (\partial_x w_m)\,dx$ can be precomputed as a single
+The term $\int w_n w_l (\partial_x w_m)dx$ can be precomputed as a single
 array indexed by $m,n,l$.
 
 The method is conservative since only the zeroth Legendre polynomial contributes
-to $\int u\,dx$ in a cell, and the update for the zeroth coefficient reduces to
+to $\int udx$ in a cell, and the update for the zeroth coefficient reduces to
 
 $$
 \Delta x (\partial_t c_0) = -[J_\text{numerical}]_-^+
