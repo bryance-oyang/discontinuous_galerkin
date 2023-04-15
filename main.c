@@ -34,8 +34,8 @@
 
 #include "ws_ctube.h"
 
-#define NGHOST 1
-#define ORDER 3
+#define NGHOST 1 /* must be 1 */
+#define ORDER 3 /* must be < 3 */
 #define CFL (0.8 * (1.0 / (2*(3) + 1))) /* 1 / (2*order + 1) */
 #define WAVE_AMP 1e-6
 #define MAX_TIME 2.2
