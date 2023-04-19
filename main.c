@@ -242,7 +242,7 @@ void compute_dcdt(struct sim *restrict sim)
 /* implements SSPRK3 3rd order time integrator */
 void take_big_timestep(struct sim *restrict sim)
 {
-	memcpy(sim->c0, sim->c, ORDER * (sim->ncell + 2*NGHOST) * sizeof(sim->c));
+	memcpy(sim->c0, sim->c, ORDER * (sim->ncell + 2*NGHOST) * sizeof(*sim->c));
 
 	for (int s = 0; s < 3; s++) {
 		compute_dcdt(sim);
